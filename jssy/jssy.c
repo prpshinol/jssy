@@ -19,7 +19,7 @@ static inline int isBlank(char c){
     return c == ' ' || c == '\n' || c == '\r' || c == '\t';
 }
 
-long jssy_parse_p(const char **buffer, size_t *bufferSize, jssytok_t **tokens, size_t *tokensBufSize){
+long jssy_parse_p(char **buffer, size_t *bufferSize, jssytok_t **tokens, size_t *tokensBufSize){
     long ret = 1;
     long nowParse = 0;
     char c = 0;
@@ -44,9 +44,9 @@ long jssy_parse_p(const char **buffer, size_t *bufferSize, jssytok_t **tokens, s
             tk->subval = &(*tokens)[1];
         reparseArr:
             tmplink = incTok;
-            tk->size++;
             assure(nowParse, (nowParse = jssy_parse_p(buffer, bufferSize, tokens, tokensBufSize)) > 0);
             ret += nowParse;
+            tk->size += nowParse;
             while ((c = valIncBuf) && isBlank(c));
             if (c == ','){
                 if (*tokens) tmplink->next = &(*tokens)[1];
@@ -88,6 +88,7 @@ long jssy_parse_p(const char **buffer, size_t *bufferSize, jssytok_t **tokens, s
             if (*tokens) tmplink->subval = incTok;
             assure(nowParse, (nowParse = jssy_parse_p(buffer, bufferSize, tokens, tokensBufSize)) > 0);
             ret +=nowParse;
+            tk->size += nowParse;
             while ((c = valIncBuf) && isBlank(c));
             if (c == ','){
                 if (*tokens) tmplink->next = &(*tokens)[1];
@@ -110,9 +111,12 @@ long jssy_parse_p(const char **buffer, size_t *bufferSize, jssytok_t **tokens, s
             break;
         case '"':
             tk->type = JSSY_STRING;
-            tk->value = (char*)*buffer;
-            while ((c = valIncBuf) && (c != '"' || tk->value[tk->size-1] == '\\'))
+            tk->value = *buffer;
+            while ((c = valIncBuf) && (nowParse++ || c != '"')){
                 tk->size++;
+                if (c != '\\' || nowParse == 2)
+                    nowParse = 0;
+            }
             return ret;
         case 't':
             assure(JSSY_ERROR_INVAL, (c = valIncBuf) && c == 'r');
@@ -121,11 +125,17 @@ long jssy_parse_p(const char **buffer, size_t *bufferSize, jssytok_t **tokens, s
             tk->type = JSSY_PRIMITIVE;
             tk->numval = 1;
             return ret;
+        case 'n':
+            assure(JSSY_ERROR_INVAL, (c = valIncBuf) && c == 'u');
+            assure(JSSY_ERROR_INVAL, (c = valIncBuf) && c == 'l');
+            assure(JSSY_ERROR_INVAL, (c = valIncBuf) && c == 'l');
+            goto isfalse;
         case 'f':
             assure(JSSY_ERROR_INVAL, (c = valIncBuf) && c == 'a');
             assure(JSSY_ERROR_INVAL, (c = valIncBuf) && c == 'l');
             assure(JSSY_ERROR_INVAL, (c = valIncBuf) && c == 's');
             assure(JSSY_ERROR_INVAL, (c = valIncBuf) && c == 'e');
+        isfalse:
             tk->type = JSSY_PRIMITIVE;
             tk->numval = 0;
             return ret;
@@ -164,7 +174,7 @@ long jssy_parse_p(const char **buffer, size_t *bufferSize, jssytok_t **tokens, s
     return ret;
 }
 
-long jssy_parse(const char *buffer, size_t bufferSize, jssytok_t *tokens, size_t tockensBufSize){
+long jssy_parse(char *buffer, size_t bufferSize, jssytok_t *tokens, size_t tockensBufSize){
     return jssy_parse_p(&buffer, &bufferSize, &tokens, &tockensBufSize);
 }
 
